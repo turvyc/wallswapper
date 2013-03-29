@@ -7,13 +7,22 @@ class WallSwapper:
     GNOME_3_COMMAND = '/usr/bin/gsettings set org.gnome.desktop.background picture-uri file://{0}'
 
     def __init__(self, img_dir):
-        '''Constructor. Loads all images in img_dir into the queue.'''
+        '''Constructor. Sets all attributes to default values. The queue is
+        only populated after an explicit call to the generateQueue() function, 
+        which allows time for other attributes (such as verbosity and recursion)
+        to be modified.'''
         seed()
-        self.verbose = False
         self.img_dir = img_dir
+        self.verbose = False
+        self.recursive = False
+        self.file_list = []
+        self.queue = []
+        self.viewed = []
+
+    def generateQueue(self):
+        '''Generates the queue for the initial run.'''
         self.file_list = self.getFileList()
         self.queue = self.getImageList(self.file_list)
-        self.viewed = []
 
     def nextWallpaper(self):
         '''Sets the wallpaper to a random image in the queue. If the queue has
@@ -31,7 +40,7 @@ class WallSwapper:
             self.queue = [img for img in current_image_list if img not in self.viewed]
             self.file_list = current_file_list
 
-        # Check if the quue has been exhausted. If so, reset it.
+        # Check if the queue has been exhausted. If so, reset it.
         if not len(self.queue):
             if self.verbose: print('All images have been displayed. Resetting.')
             self.queue = self.getImageList(self.file_list)
@@ -43,17 +52,26 @@ class WallSwapper:
         self.viewed.append(next_wallpaper)
 
         # Change the wallpaper
-        command = self.GNOME_3_COMMAND.format(os.path.join(self.img_dir, next_wallpaper))
+        command = self.GNOME_3_COMMAND.format(next_wallpaper)
         os.system(command)
 
         if self.verbose: print('Changed wallpaper to {0}.'.format(next_wallpaper))
 
     def getFileList(self):
-        '''Returns a list of the files in img_dir.'''
+        '''Returns a list of the absolute file names of the images in img_dir,
+        working recursively if specified.'''
 
+        file_list = []
+
+        # Get the directory tree as a generator
         try:
-            if self.verbose: print('Reading image directory.')
-            file_list = os.listdir(self.img_dir)
+            for root, dirs, files in os.walk(self.img_dir):
+                if self.verbose: print('Reading directory: {0}'.format(root))
+                for file in files:
+                    file_list.append(os.path.join(root, file))
+                if not self.recursive:
+                    break
+
         except OSError as e:
             message = 'Error reading directory "{0}". Exiting. '
             if self.verbose: message += e
@@ -71,7 +89,7 @@ class WallSwapper:
                 imgs.append(file)
                 if self.verbose: print('Added {0} to available wallpaper list.'.format(file))
             else:
-                if self.verbose: print('{0} is not an image. Skipping.').format(file)
+                if self.verbose: print('{0} is not an image. Skipping.'.format(file))
 
         return imgs
 
@@ -83,6 +101,13 @@ class WallSwapper:
         extension = os.path.splitext(file)[1]
         return (extension.lower() in IMAGE_EXTENSIONS)
 
+    def setRecursive(self):
+        '''Enables recursion. Without recursion enabled, only the files in
+        img_dir will be loaded. When it is enabled, all files in the entire
+        directory tree with img_dir as the root are loaded.'''
+        self.recursive = True
+        if self.verbose: print('Recursion enabled.')
+
     def setVerbose(self):
         '''Enables verbosity. Verbosity refers to a state of the program in
         which all actions, decisions, and errors are exhaustively enumerated 
@@ -93,3 +118,4 @@ class WallSwapper:
         onslaught of minutia, because let's face it, most of us don't want
         to read so much unnecessary output diarrhea.'''
         self.verbose = True
+        print('Verbosity enabled.')
